@@ -54,6 +54,7 @@ logging:
     com.task.reifensbank: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.security: DEBUG
+    org.springframework.security.web.FilterChainProxy: OFF
 
 # ===============================
 # 🔐 Security (dev secrets)

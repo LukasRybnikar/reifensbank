@@ -29,7 +29,6 @@ public class DocumentsSecurity {
     ) throws Exception {
 
         http
-                // tento chain platí len pre /api/documents/**
                 .securityMatcher("/api/documents/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

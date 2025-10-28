@@ -1,6 +1,6 @@
 package com.task.reifensbank.logging;
 
-import com.task.reifensbank.service.LogService;
+import com.task.reifensbank.util.LogService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -12,14 +12,13 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class RequestLoggingInterceptor implements HandlerInterceptor {
 
-    private final LogService logService;
 
     @Override
     public boolean preHandle(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull Object handler) {
-        logService.logEndpoint(request.getMethod(), request.getRequestURI());
+        LogService.logEndpoint(request.getMethod(), request.getRequestURI());
         return true;
     }
 }
