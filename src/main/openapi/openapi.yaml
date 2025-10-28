@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Reifensbank DMS API
+  version: 1.0.0
+  description: |
+    Lightweight document management system: documents & protocols with authentication.
+    All endpoints (except login) require Bearer JWT.
+
+servers:
+  - url: http://localhost:8080/api
+
+tags:
+  - name: Auth
+  - name: Documents
+  - name: Protocols
+
+paths:
+  /auth/login:
+    post:
+      tags: [ Auth ]
+      summary: Login and obtain JWT
+      operationId: authLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ------------------ DOCUMENTS ------------------
+  /documents:
+    post:
+      tags: [ Documents ]
+      summary: Create document (metadata + binary upload)
+      description: |
+        Upload document binary via multipart/form-data together with metadata.
+        Allowed types: pdf, jpg, or any other extension.
+      operationId: documentsCreate
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ file, name, type ]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  description: Human readable document name (e.g., filename without extension)
+                type:
+                  type: string
+                  description: File extension (e.g., pdf, jpg, txt)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /documents/{id}:
+    patch:
+      tags: [ Documents ]
+      summary: Partially update document metadata
+      description: Send only fields you want to change (e.g., just name).
+      operationId: documentsUpdateMetadata
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /documents/{id}/content:
+    put:
+      tags: [ Documents ]
+      summary: Replace binary content
+      description: Re-upload file; metadata remains unchanged.
+      operationId: documentsReplaceContent
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ file ]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Content replaced
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+    get:
+      tags: [ Documents ]
+      summary: Download binary content
+      description: |
+        Streams the stored file. Clients should use the Content-Disposition header
+        for filename; caching can leverage ETag.
+      operationId: documentsDownloadContent
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      responses:
+        '200':
+          description: OK (binary stream)
+          headers:
+            Content-Disposition:
+              description: Suggested filename (e.g., attachment; filename="invoice.pdf")
+              schema: { type: string }
+            Content-Length:
+              description: Size in bytes
+              schema: { type: integer, format: int64 }
+            ETag:
+              description: Entity tag for caching / conditional requests
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /documents/{id}/content/info:
+    get:
+      tags: [ Documents ]
+      summary: Get binary content metadata (info)
+      description: Returns filename, extension, mimeType, size, checksum, uploadedAt, etc.
+      operationId: documentsGetContentInfo
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentContentInfo' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------ PROTOCOLS ------------------
+  /protocols:
+    post:
+      tags: [ Protocols ]
+      summary: Create protocol (must contain ≥1 document)
+      operationId: protocolsCreate
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        '400':
+          description: Validation error (e.g., empty documentIds)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /protocols/{id}:
+    get:
+      tags: [ Protocols ]
+      summary: Get protocol by id
+      operationId: protocolsGetById
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Protocol'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [ Protocols ]
+      summary: Edit whole protocol (all data)
+      description: Replaces state and documentIds.
+      operationId: protocolsUpdateAll
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Protocol'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /protocols/{id}/state:
+    patch:
+      tags: [ Protocols ]
+      summary: Edit only protocol state
+      operationId: protocolsUpdateState
+      security: [ { bearerAuth: [ ] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolStateUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Protocol'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    idPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+      description: Public UUID of the resource
+
+  schemas:
+    # -------- Auth --------
+    LoginRequest:
+      type: object
+      required: [ username, password ]
+      properties:
+        username: { type: string, minLength: 1 }
+        password: { type: string, format: password, minLength: 1 }
+    LoginResponse:
+      type: object
+      required: [ accessToken, tokenType ]
+      properties:
+        accessToken: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, example: 3600 }
+
+    Error:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer }
+        error: { type: string }
+        message: { type: string }
+        path: { type: string }
+
+    # -------- Documents --------
+    Document:
+      type: object
+      required: [ id, name, type, createdBy, createdAt ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, description: 'File extension or MIME type' }
+        createdBy: { type: string, description: 'username or userId string' }
+        createdAt: { type: string, format: date-time }
+
+    DocumentContentInfo:
+      type: object
+      required: [ documentId, fileName, extension, mimeType, sizeBytes, uploadedAt ]
+      properties:
+        documentId: { type: string, format: uuid }
+        fileName: { type: string, example: "invoice-2025-10.pdf" }
+        extension: { type: string, example: "pdf" }
+        mimeType: { type: string, example: "application/pdf" }
+        sizeBytes: { type: integer, format: int64, example: 245761 }
+        checksumSha256: { type: string, example: "3f786850e387550fdab836ed7e6dc881de23001b" }
+        uploadedAt: { type: string, format: date-time }
+
+    # -------- Protocols --------
+    ProtocolState:
+      type: string
+      enum: [ NEW, PREPARE_FOR_SHIPMENT, CANCELED ]
+    Protocol:
+      type: object
+      required: [ id, state, createdBy, createdAt, documentIds ]
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/ProtocolState' }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        documentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    ProtocolCreate:
+      type: object
+      required: [ documentIds ]
+      properties:
+        # state can be omitted -> defaults to NEW on server
+        state: { $ref: '#/components/schemas/ProtocolState' }
+        documentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    ProtocolUpdate:
+      type: object
+      required: [ state, documentIds ]
+      properties:
+        state: { $ref: '#/components/schemas/ProtocolState' }
+        documentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    ProtocolStateUpdate:
+      type: object
+      required: [ state ]
+      properties:
+        state: { $ref: '#/components/schemas/ProtocolState' }
