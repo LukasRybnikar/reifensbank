@@ -24,7 +24,7 @@ public class Protocol {
 
     @NotNull
     @Column(name = "public_id", nullable = false)
-    private UUID publicId; // DB default uuid_generate_v4()
+    private UUID publicId;
 
     @NotNull
     @Column(name = "code", nullable = false, unique = true, columnDefinition = "text")
@@ -37,7 +37,6 @@ public class Protocol {
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
-    // Keep as String if you prefer; or switch to the enum below
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -60,7 +59,6 @@ public class Protocol {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    // Owning side of protocol_document
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "protocol_document",

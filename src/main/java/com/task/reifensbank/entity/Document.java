@@ -23,7 +23,7 @@ public class Document {
 
     @NotNull
     @Column(name = "public_id", nullable = false)
-    private UUID publicId; // DB default uuid_generate_v4()
+    private UUID publicId;
 
     @NotNull
     @Column(name = "filename", nullable = false, columnDefinition = "text")
