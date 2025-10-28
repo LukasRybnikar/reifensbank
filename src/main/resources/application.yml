@@ -1,0 +1,82 @@
+# ===============================
+# 🏷️ Application
+# ===============================
+spring:
+  application:
+    name: reifensbank
+
+  # ===============================
+  # 🌐 Web server
+  # ===============================
+  server:
+    port: 8080
+    compression:
+      enabled: true
+    error:
+      include-message: never
+    forward-headers-strategy: framework
+
+  # ===============================
+  # 📂 File Upload
+  # ===============================
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+  # ===============================
+  # 🗄️ JPA / Hibernate (shared)
+  # ===============================
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    database: postgresql
+
+  # ===============================
+  # 🏊 Connection pool (Hikari)
+  # ===============================
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 30000
+
+# ===============================
+# 🩺 Actuator
+# ===============================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# ===============================
+# 🔐 App-specific
+# ===============================
+app:
+  security:
+    enabled: true
+    documents: true
+    protocols: true
+    fallbackDeny: true
+
+    jwt:
+      secret: ""
+      expiration: 3600
+  storage:
+    root-path: ""

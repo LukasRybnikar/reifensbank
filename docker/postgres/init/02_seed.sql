@@ -67,10 +67,10 @@ ON CONFLICT DO NOTHING;
 -- ===== USERS =====
 -- bcrypt hash for password "password"
 INSERT INTO "user" (username, password_hash)
-VALUES ('reader_doc', '$2a$10$Q9i9f2dXz4bqgK2qk3qV/Ow3m0uY8zY9xC7Qe8w2j2p8zN2rI1Hq2'),
-       ('creator_doc', '$2a$10$Q9i9f2dXz4bqgK2qk3qV/Ow3m0uY8zY9xC7Qe8w2j2p8zN2rI1Hq2'),
-       ('editor_doc', '$2a$10$Q9i9f2dXz4bqgK2qk3qV/Ow3m0uY8zY9xC7Qe8w2j2p8zN2rI1Hq2'),
-       ('protocol_master', '$2a$10$Q9i9f2dXz4bqgK2qk3qV/Ow3m0uY8zY9xC7Qe8w2j2p8zN2rI1Hq2')
+VALUES ('reader_doc', '$2b$10$F1xoVrG7BD23ZSsWbd5kz.QGGeqTjRGNXtmQdJbO.AxCURd5tzeki'),
+       ('creator_doc', '$2b$10$F1xoVrG7BD23ZSsWbd5kz.QGGeqTjRGNXtmQdJbO.AxCURd5tzeki'),
+       ('editor_doc', '$2b$10$F1xoVrG7BD23ZSsWbd5kz.QGGeqTjRGNXtmQdJbO.AxCURd5tzeki'),
+       ('protocol_master', '$2b$10$F1xoVrG7BD23ZSsWbd5kz.QGGeqTjRGNXtmQdJbO.AxCURd5tzeki')
 ON CONFLICT (username) DO NOTHING;
 
 -- ===== USER ↔ ROLE ASSIGNMENTS =====

@@ -25,12 +25,8 @@
         <!-- Java / Encoding -->
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <!-- OpenAPI spec in repo -->
-        <openapi.spec>${project.basedir}/src/main/openapi/openapi.yaml</openapi.spec>
-        <!-- OpenAPI generated sources output -->
-        <openapi.output>${project.build.directory}/generated-sources/openapi</openapi.output>
-
+        <!-- Jwt -->
+        <jjwt.version>0.12.6</jjwt.version>
         <!-- Centralized versions (only for artifacts not managed by Spring Boot BOM) -->
         <openapi.generator.version>7.5.0</openapi.generator.version>
         <swagger.annotations.version>2.2.22</swagger.annotations.version>
@@ -38,13 +34,16 @@
         <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
         <lombok.version>1.18.34</lombok.version>
         <postgresql.version>42.7.4</postgresql.version>
-
         <!-- Plugin versions -->
         <build.helper.plugin.version>3.5.0</build.helper.plugin.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.war.plugin.version>3.4.0</maven.war.plugin.version>
-
         <spring.boot.maven.plugin.version>3.5.7</spring.boot.maven.plugin.version>
+
+        <!-- OpenAPI spec in repo -->
+        <openapi.spec>${project.basedir}/src/main/openapi/openapi.yaml</openapi.spec>
+        <!-- OpenAPI generated sources output -->
+        <openapi.output>${project.build.directory}/generated-sources/openapi</openapi.output>
     </properties>
 
     <dependencies>
@@ -95,6 +94,13 @@
             <version>${swagger.annotations.version}</version>
         </dependency>
 
+        <!-- actuator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+
         <!-- Jakarta Bean Validation (managed by Spring Boot parent) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -125,6 +131,26 @@
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
             <version>${jakarta.annotation.version}</version>
+        </dependency>
+
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
     </dependencies>
 
