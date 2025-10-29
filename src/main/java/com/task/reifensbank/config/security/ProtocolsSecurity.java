@@ -1,12 +1,15 @@
 package com.task.reifensbank.config.security;
 
+import com.task.reifensbank.enums.AuthorityEnum;
 import com.task.reifensbank.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -29,12 +32,17 @@ public class ProtocolsSecurity {
     ) throws Exception {
 
         http
-                .securityMatcher("/api/protocols/**")
-                .csrf(csrf -> csrf.disable())
+                .securityMatcher("/protocols/**")
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(HttpMethod.POST, "/protocols").hasAuthority(AuthorityEnum.CREATE_PROTOCOL.name());
+                    auth.requestMatchers(HttpMethod.GET, "/protocols/*").hasAuthority(AuthorityEnum.VIEW_PROTOCOL.name());
+                    auth.requestMatchers(HttpMethod.PUT, "/protocols/*").hasAuthority(AuthorityEnum.EDIT_PROTOCOL.name());
+                    auth.requestMatchers(HttpMethod.PATCH, "/protocols/*/state").hasAuthority(AuthorityEnum.EDIT_PROTOCOL.name());
+
                     if (protectProtocols) {
-                        auth.anyRequest().authenticated();
+                        auth.anyRequest().denyAll();
                     } else {
                         auth.anyRequest().permitAll();
                     }

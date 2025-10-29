@@ -35,8 +35,8 @@ CREATE TABLE IF NOT EXISTS "protocol"
     id          BIGSERIAL PRIMARY KEY,
     public_id   UUID        NOT NULL UNIQUE DEFAULT uuid_generate_v4(),
 
-    code        TEXT        NOT NULL UNIQUE,
-    title       TEXT        NOT NULL,
+    code        TEXT UNIQUE,
+    title       TEXT,
     description TEXT,
 
     status      TEXT        NOT NULL        DEFAULT 'NEW'

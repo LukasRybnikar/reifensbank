@@ -1,6 +1,7 @@
 package com.task.reifensbank.usecase;
 
 import com.task.reifensbank.entity.Protocol;
+import com.task.reifensbank.exceptions.ReifensbankHttpException;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.mappers.ProtocolMappers;
 import com.task.reifensbank.model.ProtocolCreate;
@@ -35,6 +36,8 @@ class ProtocolsAppServiceTest {
     @InjectMocks
     private ProtocolsAppService appService;
 
+    // -------------------- CREATE --------------------
+
     @Test
     void create_happyPath_returns201AndMappedBody() {
         UUID publicId = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -50,7 +53,7 @@ class ProtocolsAppServiceTest {
 
         com.task.reifensbank.model.Protocol mapped = new com.task.reifensbank.model.Protocol();
         mapped.setId(publicId);
-        mapped.setDocumentIds(List.of(UUID.randomUUID()));
+        mapped.setDocumentIds(req.getDocumentIds());
         mapped.setState(ProtocolState.NEW);
 
         try (MockedStatic<ProtocolMappers> mapperMock = Mockito.mockStatic(ProtocolMappers.class)) {
@@ -64,16 +67,29 @@ class ProtocolsAppServiceTest {
             assertThat(resp.getBody().getId()).isEqualTo(publicId);
             assertThat(resp.getBody().getState()).isEqualTo(ProtocolState.NEW);
 
-            verify(protocolService, times(1)).create(req);
-            mapperMock.verify(() -> ProtocolMappers.toModel(entity), times(1));
+            verify(protocolService).create(req);
+            mapperMock.verify(() -> ProtocolMappers.toModel(entity));
         }
     }
 
     @Test
-    void create_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+    void create_whenServiceThrowsHttp400_isPropagated() {
         ProtocolCreate req = new ProtocolCreate();
         req.setDocumentIds(List.of(UUID.randomUUID()));
+        when(protocolService.create(req))
+                .thenThrow(new ReifensbankHttpException(HttpStatus.BAD_REQUEST, "At least one document must be provided"));
 
+        assertThatThrownBy(() -> appService.create(req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+
+        verify(protocolService).create(req);
+    }
+
+    @Test
+    void create_whenServiceThrowsUnexpected_wrapsIntoRuntime500() {
+        ProtocolCreate req = new ProtocolCreate();
+        req.setDocumentIds(List.of(UUID.randomUUID()));
         when(protocolService.create(any())).thenThrow(new RuntimeException("boom"));
 
         assertThatThrownBy(() -> appService.create(req))
@@ -81,6 +97,8 @@ class ProtocolsAppServiceTest {
 
         verify(protocolService).create(req);
     }
+
+    // -------------------- GET BY ID --------------------
 
     @Test
     void getById_happyPath_returns200AndMappedBody() {
@@ -106,18 +124,31 @@ class ProtocolsAppServiceTest {
             assertThat(resp.getBody().getId()).isEqualTo(id);
 
             verify(protocolService).getByPublicId(id);
-            mapperMock.verify(() -> ProtocolMappers.toModel(entity), times(1));
+            mapperMock.verify(() -> ProtocolMappers.toModel(entity));
         }
     }
 
     @Test
-    void getById_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+    void getById_whenServiceThrows404_isPropagated() {
+        UUID id = UUID.randomUUID();
+        when(protocolService.getByPublicId(id))
+                .thenThrow(new ReifensbankHttpException(HttpStatus.NOT_FOUND, "Protocol not found"));
+
+        assertThatThrownBy(() -> appService.getById(id))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void getById_whenServiceThrowsUnexpected_wrapsIntoRuntime500() {
         UUID id = UUID.randomUUID();
         when(protocolService.getByPublicId(id)).thenThrow(new RuntimeException("not found"));
 
         assertThatThrownBy(() -> appService.getById(id))
                 .isInstanceOf(ReifensbankRuntimeException.class);
     }
+
+    // -------------------- UPDATE ALL --------------------
 
     @Test
     void updateAll_happyPath_returns200AndMappedBody() {
@@ -148,12 +179,26 @@ class ProtocolsAppServiceTest {
             assertThat(resp.getBody().getState()).isEqualTo(ProtocolState.PREPARE_FOR_SHIPMENT);
 
             verify(protocolService).updateAll(id, req);
-            mapperMock.verify(() -> ProtocolMappers.toModel(entity), times(1));
+            mapperMock.verify(() -> ProtocolMappers.toModel(entity));
         }
     }
 
     @Test
-    void updateAll_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+    void updateAll_whenServiceThrowsHttp400_isPropagated() {
+        UUID id = UUID.randomUUID();
+        ProtocolUpdate req = new ProtocolUpdate();
+        req.setDocumentIds(List.of()); // invalid
+
+        when(protocolService.updateAll(any(), any()))
+                .thenThrow(new ReifensbankHttpException(HttpStatus.BAD_REQUEST, "At least one document must be provided"));
+
+        assertThatThrownBy(() -> appService.updateAll(id, req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateAll_whenServiceThrowsUnexpected_wrapsIntoRuntime500() {
         UUID id = UUID.randomUUID();
         ProtocolUpdate req = new ProtocolUpdate();
 
@@ -162,6 +207,8 @@ class ProtocolsAppServiceTest {
         assertThatThrownBy(() -> appService.updateAll(id, req))
                 .isInstanceOf(ReifensbankRuntimeException.class);
     }
+
+    // -------------------- UPDATE STATE --------------------
 
     @Test
     void updateState_happyPath_returns200AndMappedBody() {
@@ -190,12 +237,26 @@ class ProtocolsAppServiceTest {
             assertThat(resp.getBody().getState()).isEqualTo(ProtocolState.CANCELED);
 
             verify(protocolService).updateState(id, req);
-            mapperMock.verify(() -> ProtocolMappers.toModel(entity), times(1));
+            mapperMock.verify(() -> ProtocolMappers.toModel(entity));
         }
     }
 
     @Test
-    void updateState_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+    void updateState_whenServiceThrowsHttp409_isPropagated() {
+        UUID id = UUID.randomUUID();
+        ProtocolStateUpdate req = new ProtocolStateUpdate();
+        req.setState(ProtocolState.CANCELED);
+
+        when(protocolService.updateState(any(), any()))
+                .thenThrow(new ReifensbankHttpException(HttpStatus.CONFLICT, "Illegal state change"));
+
+        assertThatThrownBy(() -> appService.updateState(id, req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void updateState_whenServiceThrowsUnexpected_wrapsIntoRuntime500() {
         UUID id = UUID.randomUUID();
         ProtocolStateUpdate req = new ProtocolStateUpdate();
 

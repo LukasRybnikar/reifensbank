@@ -1,6 +1,7 @@
 package com.task.reifensbank.usecase;
 
 import com.task.reifensbank.entity.Protocol;
+import com.task.reifensbank.exceptions.ReifensbankHttpException;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.mappers.ProtocolMappers;
 import com.task.reifensbank.model.ProtocolStateUpdate;
@@ -27,10 +28,13 @@ public class ProtocolsAppService {
             Protocol saved = protocolService.create(req);
             var body = ProtocolMappers.toModel(saved);
             URI location = URI.create("/protocols/" + saved.getPublicId());
-            log.debug("Protocol created: id={}, publicId={}, code={}, location={}", saved.getId(), saved.getPublicId(), saved.getCode(), location);
+            log.debug("Protocol created: id={}, publicId={}, location={}", saved.getId(), saved.getPublicId(), location);
             return ResponseEntity.created(location).body(body);
+        } catch (ReifensbankHttpException ex) {
+            log.warn("Failed to create protocol: {}", ex.getMessage());
+            throw ex; // zachovaj status (400, 404, ...)
         } catch (Exception e) {
-            log.error("Failed to create protocol: '. Reason: {}", e.getMessage(), e);
+            log.error("Failed to create protocol. Reason: {}", e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }
@@ -40,6 +44,9 @@ public class ProtocolsAppService {
             log.debug("Fetching protocol: id={}", id);
             Protocol p = protocolService.getByPublicId(id);
             return ResponseEntity.ok(ProtocolMappers.toModel(p));
+        } catch (ReifensbankHttpException ex) {
+            log.warn("Get protocol failed for {}: {}", id, ex.getMessage());
+            throw ex;
         } catch (Exception e) {
             log.error("Get protocol failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
@@ -51,6 +58,9 @@ public class ProtocolsAppService {
             log.debug("Updating protocol (full): id={}, state={}, docs={}", id, req.getState(), req.getDocumentIds());
             Protocol updated = protocolService.updateAll(id, req);
             return ResponseEntity.ok(ProtocolMappers.toModel(updated));
+        } catch (ReifensbankHttpException ex) {
+            log.warn("Update protocol failed for {}: {}", id, ex.getMessage());
+            throw ex;
         } catch (Exception e) {
             log.error("Update protocol failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
@@ -62,6 +72,9 @@ public class ProtocolsAppService {
             log.debug("Updating protocol state: id={}, state={}", id, req.getState());
             Protocol updated = protocolService.updateState(id, req);
             return ResponseEntity.ok(ProtocolMappers.toModel(updated));
+        } catch (ReifensbankHttpException ex) {
+            log.warn("Update protocol state failed for {}: {}", id, ex.getMessage());
+            throw ex;
         } catch (Exception e) {
             log.error("Update protocol state failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();

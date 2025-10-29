@@ -26,12 +26,10 @@ public class Protocol {
     @Column(name = "public_id", nullable = false)
     private UUID publicId;
 
-    @NotNull
-    @Column(name = "code", nullable = false, unique = true, columnDefinition = "text")
+    @Column(name = "code", unique = true, columnDefinition = "text")
     private String code;
 
-    @NotNull
-    @Column(name = "title", nullable = false, columnDefinition = "text")
+    @Column(name = "title", columnDefinition = "text")
     private String title;
 
     @Column(name = "description", columnDefinition = "text")
