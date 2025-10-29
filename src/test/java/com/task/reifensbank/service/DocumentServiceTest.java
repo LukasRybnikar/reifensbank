@@ -159,4 +159,80 @@ class DocumentServiceTest {
         // cleanup attempted
         verify(storage).delete(objectKey);
     }
+
+    @Test
+    void replaceContent_happyPath_uploadsToStorageAndSavesEntity() throws Exception {
+        // Arrange
+        UUID id = UUID.fromString("88888888-8888-8888-8888-888888888888");
+        MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
+
+        Document existing = new Document();
+        existing.setId(10L);
+        existing.setPublicId(id);
+        existing.setFilename("old.pdf");
+        existing.setContentType("application/pdf");
+        existing.setSizeBytes(123L);
+        existing.setStoragePath("bucket/path/oldkey");
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(existing));
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        Document result = service.replaceContent(id, file);
+
+        // Assert storage interaction (upload to same key)
+        verify(storage, times(1)).put(eq("bucket/path/oldkey"), eq(file));
+
+        // Assert DB save happened
+        verify(documentRepository, times(1)).save(any(Document.class));
+
+        // Assert entity changes
+        assertThat(result.getPublicId()).isEqualTo(id);
+        assertThat(result.getSizeBytes()).isEqualTo(file.getSize());
+        assertThat(result.getUpdatedAt()).isNotNull();
+
+        // Optional: verify order (upload before save)
+        InOrder inOrder = inOrder(storage, documentRepository);
+        inOrder.verify(storage).put(eq("bucket/path/oldkey"), eq(file));
+        inOrder.verify(documentRepository).save(any(Document.class));
+    }
+
+    @Test
+    void replaceContent_whenStoragePutFails_wrapsAndDoesNotSave() throws Exception {
+        // Arrange
+        UUID id = UUID.fromString("99999999-9999-9999-9999-999999999999");
+        MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
+
+        Document existing = new Document();
+        existing.setId(11L);
+        existing.setPublicId(id);
+        existing.setStoragePath("bucket/path/key");
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(existing));
+        doThrow(new RuntimeException("storage down")).when(storage).put(anyString(), any(MultipartFile.class));
+
+        // Act + Assert
+        assertThatThrownBy(() -> service.replaceContent(id, file))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        // No DB save when storage fails
+        verify(documentRepository, never()).save(any(Document.class));
+    }
+
+    @Test
+    void replaceContent_whenDocumentNotFound_throwsReifensbankRuntimeException() throws Exception {
+        UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        MultipartFile file = new MockMultipartFile("file", "x.pdf", "application/pdf", "x".getBytes());
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.replaceContent(id, file))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        // no storage nor DB interaction
+        verifyNoInteractions(storage);
+        verify(documentRepository, never()).save(any(Document.class));
+    }
+
+
 }

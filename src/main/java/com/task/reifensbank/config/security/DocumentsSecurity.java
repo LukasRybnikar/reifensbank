@@ -38,6 +38,7 @@ public class DocumentsSecurity {
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.POST, "/documents").hasAuthority(AuthorityEnum.CREATE_DOCUMENT.name());
                     auth.requestMatchers(HttpMethod.PATCH, "/documents/*").hasAuthority(AuthorityEnum.EDIT_DOCUMENT.name());
+                    auth.requestMatchers(HttpMethod.PUT, "/documents/*/content").hasAuthority(AuthorityEnum.EDIT_DOCUMENT.name());
                     if (protectDocs) {
                         auth.anyRequest().denyAll();
                     } else {

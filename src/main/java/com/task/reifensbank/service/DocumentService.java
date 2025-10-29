@@ -92,8 +92,7 @@ public class DocumentService {
             log.trace("Incoming request payload: name='{}', type='{}'", req.getName(), req.getType());
 
             Document doc = getByPublicId(id);
-            log.trace("Loaded document entity: id={}, filename='{}', contentType='{}', updatedAt={}",
-                    doc.getId(), doc.getFilename(), doc.getContentType(), doc.getUpdatedAt());
+            log.trace("Loaded document entity: id={}, filename='{}', contentType='{}', updatedAt={}", doc.getId(), doc.getFilename(), doc.getContentType(), doc.getUpdatedAt());
 
             boolean updated = false;
             if (Objects.nonNull(req.getName())) {
@@ -117,12 +116,35 @@ public class DocumentService {
                     doc.getFilename(), doc.getContentType(), doc.getUpdatedAt());
 
             Document saved = documentRepository.save(doc);
-            log.debug("Document metadata updated successfully: id={}, publicId={}, filename='{}', contentType='{}'",
-                    saved.getId(), saved.getPublicId(), saved.getFilename(), saved.getContentType());
+            log.debug("Document metadata updated successfully: id={}, publicId={}, filename='{}', contentType='{}'", saved.getId(), saved.getPublicId(), saved.getFilename(), saved.getContentType());
 
             return saved;
         } catch (Exception e) {
             log.error("Metadata update failed for {}: {}", id, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
+
+    @Transactional
+    public Document replaceContent(UUID id, MultipartFile file) {
+        log.debug("Replacing binary content for document: publicId={}", id);
+
+        Document doc = getByPublicId(id);
+        String objectKey = doc.getStoragePath();
+
+        try {
+            log.debug("Uploading new content to storage: key='{}'", objectKey);
+            storage.put(objectKey, file);
+            log.debug("Upload finished: key='{}'", objectKey);
+
+            doc.setSizeBytes(file.getSize());
+            doc.setUpdatedAt(OffsetDateTime.now());
+
+            Document saved = documentRepository.save(doc);
+            log.debug("Document content replaced successfully: id={}, publicId={}, sizeBytes={}", saved.getId(), saved.getPublicId(), saved.getSizeBytes());
+            return saved;
+        } catch (Exception e) {
+            log.error("Failed to replace content for document {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }

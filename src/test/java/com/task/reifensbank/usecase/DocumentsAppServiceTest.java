@@ -190,4 +190,96 @@ class DocumentsAppServiceTest {
             assertThat(reqCap.getValue().getType()).isEqualTo("txt");
         }
     }
+
+    @Test
+    void replaceContent_happyPath_returns200WithMappedBody() {
+        UUID id = UUID.fromString("55555555-5555-5555-5555-555555555555");
+
+        // Simulate uploaded file
+        MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
+
+        // Mock the entity returned by the service
+        Document entity = new Document();
+        entity.setId(789L);
+        entity.setPublicId(id);
+        entity.setFilename("whatever.pdf");
+        entity.setContentType("application/pdf");
+        entity.setSizeBytes((long) file.getSize());
+        entity.setStoragePath("bucket/key");
+
+        when(documentService.replaceContent(id, file)).thenReturn(entity);
+
+        // Mock the mapper
+        com.task.reifensbank.model.Document mapped = new com.task.reifensbank.model.Document();
+        mapped.setId(id);
+        mapped.setName("whatever.pdf");
+        mapped.setType("pdf");
+
+        try (MockedStatic<DocumentMappers> mapperMock = Mockito.mockStatic(DocumentMappers.class)) {
+            mapperMock.when(() -> DocumentMappers.toModel(entity)).thenReturn(mapped);
+
+            // Execute
+            ResponseEntity<com.task.reifensbank.model.Document> resp =
+                    appService.replaceContent(id, file);
+
+            // Validate response
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(resp.getBody()).isNotNull();
+            assertThat(resp.getBody().getId()).isEqualTo(id);
+            assertThat(resp.getBody().getName()).isEqualTo("whatever.pdf");
+            assertThat(resp.getBody().getType()).isEqualTo("pdf");
+
+            // Verify mocks
+            verify(documentService, times(1)).replaceContent(id, file);
+            mapperMock.verify(() -> DocumentMappers.toModel(entity), times(1));
+        }
+    }
+
+    @Test
+    void replaceContent_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+        UUID id = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        MultipartFile file = new MockMultipartFile("file", "x.pdf", "application/pdf", "x".getBytes());
+
+        when(documentService.replaceContent(any(UUID.class), any(MultipartFile.class)))
+                .thenThrow(new RuntimeException("boom"));
+
+        // Expect custom runtime exception
+        assertThatThrownBy(() -> appService.replaceContent(id, file))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        verify(documentService, times(1)).replaceContent(id, file);
+    }
+
+    @Test
+    void replaceContent_forwardsParametersExactly() {
+        UUID id = UUID.fromString("77777777-7777-7777-7777-777777777777");
+        MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
+
+        // Return dummy entity so the call completes
+        Document entity = new Document();
+        entity.setPublicId(id);
+        when(documentService.replaceContent(any(), any())).thenReturn(entity);
+
+        try (MockedStatic<DocumentMappers> mapperMock = Mockito.mockStatic(DocumentMappers.class)) {
+            mapperMock.when(() -> DocumentMappers.toModel(any()))
+                    .thenReturn(new com.task.reifensbank.model.Document());
+
+            // Execute method
+            appService.replaceContent(id, file);
+
+            // Capture arguments passed to service
+            ArgumentCaptor<UUID> idCap = ArgumentCaptor.forClass(UUID.class);
+            ArgumentCaptor<MultipartFile> fileCap = ArgumentCaptor.forClass(MultipartFile.class);
+
+            verify(documentService).replaceContent(idCap.capture(), fileCap.capture());
+
+            // Assert exact forwarding of params
+            assertThat(idCap.getValue()).isEqualTo(id);
+            assertThat(fileCap.getValue().getOriginalFilename()).isEqualTo("new.pdf");
+            assertThat(fileCap.getValue().getContentType()).isEqualTo("application/pdf");
+            assertThat(fileCap.getValue().getSize()).isEqualTo(4);
+        }
+    }
+
+
 }

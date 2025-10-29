@@ -57,4 +57,24 @@ public class DocumentsAppService {
             throw new ReifensbankRuntimeException();
         }
     }
+
+    public ResponseEntity<com.task.reifensbank.model.Document> replaceContent(UUID id, MultipartFile file) {
+        try {
+            log.debug("Starting content replacement for document: id={}, fileName='{}'", id, file.getOriginalFilename());
+            log.debug("Incoming file details: size={} bytes, contentType={}", file.getSize(), file.getContentType());
+
+            Document updated = documentService.replaceContent(id, file);
+
+            log.trace("Entity after content replacement: id={}, publicId={}, storagePath='{}', sizeBytes={}",
+                    updated.getId(), updated.getPublicId(), updated.getStoragePath(), updated.getSizeBytes());
+
+            var body = DocumentMappers.toModel(updated);
+            log.debug("Content replacement successful: id={}, publicId={}", updated.getId(), updated.getPublicId());
+
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            log.error("Content replacement failed for {}: {}", id, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
 }

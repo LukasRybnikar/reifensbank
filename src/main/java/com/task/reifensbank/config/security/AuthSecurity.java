@@ -17,7 +17,7 @@ public class AuthSecurity {
     @Order(0)
     SecurityFilterChain authChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/auth/**")
+                .securityMatcher("/auth/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())

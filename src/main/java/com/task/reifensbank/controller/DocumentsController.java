@@ -30,4 +30,9 @@ public class DocumentsController implements DocumentsApi {
     public ResponseEntity<Document> documentsUpdateMetadata(UUID id, DocumentsUpdateMetadataRequest documentsUpdateMetadataRequest) {
         return documentsAppService.updateMetadata(id, documentsUpdateMetadataRequest);
     }
+
+    @Override
+    public ResponseEntity<Document> documentsReplaceContent(UUID id, MultipartFile file) {
+        return documentsAppService.replaceContent(id, file);
+    }
 }
