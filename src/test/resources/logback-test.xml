@@ -1,0 +1,17 @@
+<configuration>
+    <!-- completely disable noisy packages -->
+    <logger name="com.task.reifensbank" level="OFF" additivity="false"/>
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+
+    <!-- optional: keep warnings/errors visible -->
+    <root level="WARN">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+</configuration>

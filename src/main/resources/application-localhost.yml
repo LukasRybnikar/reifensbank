@@ -1,0 +1,84 @@
+# ===============================
+# 🧪 Local development profile (localhost)
+# ===============================
+
+spring:
+  # ===============================
+  # 🐘 PostgreSQL datasource
+  # ===============================
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:appdb}
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      auto-commit: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: HikariPool-1
+      leak-detection-threshold: 0
+
+  main:
+    allow-circular-references: false
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  sql:
+    init:
+      mode: never
+
+
+# ===============================
+# 🧾 Logging
+# ===============================
+logging:
+  level:
+    root: INFO
+    com.task.reifensbank: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.security: DEBUG
+    org.springframework.security.web.FilterChainProxy: OFF
+
+# ===============================
+# 🔐 Security (dev secrets)
+# ===============================
+app:
+  security:
+    enabled: true
+    documents: true
+    protocols: true
+    fallbackDeny: true
+
+    # ===============================
+    # 🪣 MinIO configuration
+    # ===============================
+  storage:
+    provider: minio
+    minio:
+      # v Dockeri: služba "minio" beží na porte 9000 (service-discovery cez názov kontajnera)
+      # mimo Dockeru (lokálne): prepíš na http://localhost:9000
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ROOT_USER:minio}
+      secret-key: ${MINIO_ROOT_PASSWORD:minio-secret}
+      bucket: ${MINIO_BUCKET:files}
+
+  jwt:
+    secret: "change-me-please-a-very-long-random-256bit-secret"
+    expirationSeconds: 3600      # 1h
+    issuer: "reifensbank-dms"
+
+# ===============================
+# 🌐 Server
+# ===============================
+server:
+  servlet:
+    context-path: /api
+  port: ${APP_PORT:8080}
