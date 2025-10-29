@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -24,6 +25,11 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
     private final StorageService storage;
+
+    public Document getByPublicId(UUID id) {
+        return documentRepository.findByPublicId(id)
+                .orElseThrow(ReifensbankRuntimeException::new);
+    }
 
     @Transactional
     public Document create(MultipartFile file, String name, String extension) throws Exception {
@@ -75,6 +81,48 @@ public class DocumentService {
             } catch (Exception cleanupEx) {
                 log.error("Storage cleanup failed: key='{}'. Reason: {}", objectKey, cleanupEx.getMessage(), cleanupEx);
             }
+            throw new ReifensbankRuntimeException();
+        }
+    }
+
+    @Transactional
+    public Document updateMetadata(UUID id, com.task.reifensbank.model.DocumentsUpdateMetadataRequest req) {
+        try {
+            log.debug("Starting metadata update for document: publicId={}", id);
+            log.trace("Incoming request payload: name='{}', type='{}'", req.getName(), req.getType());
+
+            Document doc = getByPublicId(id);
+            log.trace("Loaded document entity: id={}, filename='{}', contentType='{}', updatedAt={}",
+                    doc.getId(), doc.getFilename(), doc.getContentType(), doc.getUpdatedAt());
+
+            boolean updated = false;
+            if (Objects.nonNull(req.getName())) {
+                log.debug("Updating document name from '{}' → '{}'", doc.getFilename(), req.getName());
+                doc.setFilename(req.getName());
+                updated = true;
+            }
+            if (Objects.nonNull(req.getType())) {
+                log.debug("Updating document contentType from '{}' → '{}'", doc.getContentType(), req.getType());
+                doc.setContentType(req.getType());
+                updated = true;
+            }
+
+            if (!updated) {
+                log.debug("No metadata fields provided for update — skipping save for publicId={}", id);
+                return doc;
+            }
+
+            doc.setUpdatedAt(OffsetDateTime.now());
+            log.trace("Entity before save: filename='{}', contentType='{}', updatedAt={}",
+                    doc.getFilename(), doc.getContentType(), doc.getUpdatedAt());
+
+            Document saved = documentRepository.save(doc);
+            log.debug("Document metadata updated successfully: id={}, publicId={}, filename='{}', contentType='{}'",
+                    saved.getId(), saved.getPublicId(), saved.getFilename(), saved.getContentType());
+
+            return saved;
+        } catch (Exception e) {
+            log.error("Metadata update failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }

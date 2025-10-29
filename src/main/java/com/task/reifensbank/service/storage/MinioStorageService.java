@@ -26,7 +26,7 @@ public class MinioStorageService implements StorageService {
     void init() {
         this.bucket = env.getProperty("app.storage.minio.bucket", "files");
         this.autoCreate = Boolean.parseBoolean(env.getProperty("app.storage.minio.auto-create-bucket", "true"));
-        // ŽIADNY sieťový call tu – iba načítanie configu.
+        // No network call here – only loading configuration.
         log.info("MinIO configured for bucket='{}', endpoint='{}'", bucket, env.getProperty("app.storage.minio.endpoint"));
     }
 
@@ -44,12 +44,12 @@ public class MinioStorageService implements StorageService {
             } catch (Exception e) {
                 String endpoint = env.getProperty("app.storage.minio.endpoint");
                 String hint = """
-                        MinIO endpoint nedostupný. Skontroluj:
-                        - app.storage.minio.endpoint = %s (lokálne: http://localhost:9000, v Compose: http://minio:9000)
-                        - či MinIO beží a port 9000 je dostupný
-                        - sieť/DNS (hostname 'minio' funguje iba v Compose)
+                        MinIO endpoint not reachable. Please check:
+                        - app.storage.minio.endpoint = %s (local: http://localhost:9000, in Compose: http://minio:9000)
+                        - MinIO is running and port 9000 is accessible
+                        - Network/DNS (hostname 'minio' works only in Compose)
                         """.formatted(endpoint);
-                log.error("MinIO init failed: {}", hint, e);
+                log.error("MinIO initialization failed: {}", hint, e);
                 throw e;
             }
         }

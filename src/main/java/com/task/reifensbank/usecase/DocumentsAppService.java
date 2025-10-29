@@ -3,6 +3,7 @@ package com.task.reifensbank.usecase;
 import com.task.reifensbank.entity.Document;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.mappers.DocumentMappers;
+import com.task.reifensbank.model.DocumentsUpdateMetadataRequest;
 import com.task.reifensbank.service.DocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +40,20 @@ public class DocumentsAppService {
             return ResponseEntity.created(location).body(body);
         } catch (Exception e) {
             log.error("Failed to create document: name='{}', type='{}'. Reason: {}", name, type, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
+
+    public ResponseEntity<com.task.reifensbank.model.Document> updateMetadata(UUID id, DocumentsUpdateMetadataRequest req) {
+        try {
+            log.debug("Starting metadata update for document: id={}, request={}", id, req);
+            Document updated = documentService.updateMetadata(id, req);
+            log.trace("Entity after metadata update: id={}, filename='{}', dontentType='{}'", updated.getId(), updated.getFilename(), updated.getContentType());
+            var body = DocumentMappers.toModel(updated);
+            log.debug("Metadata update successful: id={}, publicId={}", updated.getId(), updated.getPublicId());
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            log.error("Update metadata failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }

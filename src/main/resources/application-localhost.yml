@@ -79,4 +79,6 @@ app:
 # 🌐 Server
 # ===============================
 server:
+  servlet:
+    context-path: /api
   port: ${APP_PORT:8080}

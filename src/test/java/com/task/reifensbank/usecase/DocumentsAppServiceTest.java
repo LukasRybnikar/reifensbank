@@ -11,7 +11,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
@@ -21,9 +20,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@TestPropertySource(properties = {
-        "logging.level.com.task.reifensbank.usecase.DocumentsAppService=WARN"
-})
 class DocumentsAppServiceTest {
 
     @Mock
@@ -46,7 +42,7 @@ class DocumentsAppServiceTest {
 
         when(documentService.create(file, "sample", "pdf")).thenReturn(entity);
 
-        com.task.reifensbank.model.Document mapped = new com.task.reifensbank.model.Document();
+        var mapped = new com.task.reifensbank.model.Document();
         mapped.setId(publicId);
         mapped.setName("sample.pdf");
         mapped.setType("pdf");
@@ -110,6 +106,88 @@ class DocumentsAppServiceTest {
             assertThat(fileCap.getValue().getOriginalFilename()).isEqualTo("sample.pdf");
             assertThat(nameCap.getValue()).isEqualTo("myName");
             assertThat(typeCap.getValue()).isEqualTo("pdf");
+        }
+    }
+
+    @Test
+    void updateMetadata_happyPath_returns200WithMappedBody() {
+        UUID id = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        req.setName("New-Name");
+        req.setType("pdf");
+
+        Document entity = new Document();
+        entity.setId(456L);
+        entity.setPublicId(id);
+        entity.setFilename("New-Name.pdf");
+        entity.setContentType("application/pdf");
+
+        when(documentService.updateMetadata(id, req)).thenReturn(entity);
+
+        var mapped = new com.task.reifensbank.model.Document();
+        mapped.setId(id);
+        mapped.setName("New-Name.pdf");
+        mapped.setType("pdf");
+
+        try (MockedStatic<DocumentMappers> mapperMock = Mockito.mockStatic(DocumentMappers.class)) {
+            mapperMock.when(() -> DocumentMappers.toModel(entity)).thenReturn(mapped);
+
+            ResponseEntity<com.task.reifensbank.model.Document> resp =
+                    appService.updateMetadata(id, req);
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(resp.getBody()).isNotNull();
+            assertThat(resp.getBody().getId()).isEqualTo(id);
+            assertThat(resp.getBody().getName()).isEqualTo("New-Name.pdf");
+            assertThat(resp.getBody().getType()).isEqualTo("pdf");
+
+            verify(documentService, times(1)).updateMetadata(id, req);
+            mapperMock.verify(() -> DocumentMappers.toModel(entity), times(1));
+        }
+    }
+
+    @Test
+    void updateMetadata_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+        UUID id = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        req.setName("X");
+
+        when(documentService.updateMetadata(any(UUID.class), any(com.task.reifensbank.model.DocumentsUpdateMetadataRequest.class)))
+                .thenThrow(new RuntimeException("boom"));
+
+        assertThatThrownBy(() -> appService.updateMetadata(id, req))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        verify(documentService, times(1)).updateMetadata(id, req);
+    }
+
+    @Test
+    void updateMetadata_forwardsParametersExactly() {
+        UUID id = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        req.setName("ExactName");
+        req.setType("txt");
+
+        Document entity = new Document();
+        entity.setPublicId(id);
+        when(documentService.updateMetadata(any(), any())).thenReturn(entity);
+
+        try (MockedStatic<DocumentMappers> mapperMock = Mockito.mockStatic(DocumentMappers.class)) {
+            mapperMock.when(() -> DocumentMappers.toModel(any()))
+                    .thenReturn(new com.task.reifensbank.model.Document());
+
+            appService.updateMetadata(id, req);
+
+            ArgumentCaptor<UUID> idCap = ArgumentCaptor.forClass(UUID.class);
+            ArgumentCaptor<com.task.reifensbank.model.DocumentsUpdateMetadataRequest> reqCap =
+                    ArgumentCaptor.forClass(com.task.reifensbank.model.DocumentsUpdateMetadataRequest.class);
+
+            verify(documentService).updateMetadata(idCap.capture(), reqCap.capture());
+
+            assertThat(idCap.getValue()).isEqualTo(id);
+            assertThat(reqCap.getValue().getName()).isEqualTo("ExactName");
+            assertThat(reqCap.getValue().getType()).isEqualTo("txt");
         }
     }
 }
