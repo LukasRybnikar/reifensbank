@@ -1,6 +1,7 @@
 package com.task.reifensbank.usecase;
 
 import com.task.reifensbank.entity.Document;
+import com.task.reifensbank.exceptions.ReifensbankHttpException;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.mappers.DocumentMappers;
 import com.task.reifensbank.service.DocumentService;
@@ -307,5 +308,103 @@ class DocumentsAppServiceTest {
         verify(documentService).delete(id);
     }
 
+    // ---- BAD REQUEST validations ----
+
+    @Test
+    void create_whenFileNull_returns400() {
+        assertThatThrownBy(() -> appService.create(null, "n", "pdf"))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void create_whenNameBlank_returns400() {
+        MultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", "x".getBytes());
+        assertThatThrownBy(() -> appService.create(file, "  ", "pdf"))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateMetadata_whenIdNull_returns400() {
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        req.setName("x");
+        assertThatThrownBy(() -> appService.updateMetadata(null, req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void updateMetadata_whenNoFields_returns400() {
+        UUID id = UUID.fromString("11111111-1111-1111-1111-111111111112");
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        assertThatThrownBy(() -> appService.updateMetadata(id, req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void replaceContent_whenIdNull_returns400() {
+        MultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", "x".getBytes());
+        assertThatThrownBy(() -> appService.replaceContent(null, file))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void replaceContent_whenFileEmpty_returns400() {
+        UUID id = UUID.fromString("11111111-1111-1111-1111-111111111113");
+        MultipartFile empty = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[0]);
+        assertThatThrownBy(() -> appService.replaceContent(id, empty))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void delete_whenIdNull_returns400() {
+        assertThatThrownBy(() -> appService.delete(null))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+// ---- Propagation of ReifensbankHttpException from service ----
+
+    @Test
+    void updateMetadata_whenServiceReturns404_isPropagated() {
+        UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var req = new com.task.reifensbank.model.DocumentsUpdateMetadataRequest();
+        req.setName("x");
+
+        doThrow(new ReifensbankHttpException(HttpStatus.NOT_FOUND, "Document not found"))
+                .when(documentService).updateMetadata(eq(id), eq(req));
+
+        assertThatThrownBy(() -> appService.updateMetadata(id, req))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void delete_whenServiceReturns409_isPropagated() {
+        UUID id = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        doThrow(new ReifensbankHttpException(HttpStatus.CONFLICT, "Referenced by protocol"))
+                .when(documentService).delete(id);
+
+        assertThatThrownBy(() -> appService.delete(id))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void replaceContent_whenServiceReturns503_isPropagated() {
+        UUID id = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        MultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", "x".getBytes());
+
+        doThrow(new ReifensbankHttpException(HttpStatus.SERVICE_UNAVAILABLE, "Storage unavailable"))
+                .when(documentService).replaceContent(eq(id), eq(file));
+
+        assertThatThrownBy(() -> appService.replaceContent(id, file))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
 
 }

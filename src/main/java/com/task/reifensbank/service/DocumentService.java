@@ -2,6 +2,7 @@ package com.task.reifensbank.service;
 
 import com.task.reifensbank.entity.Document;
 import com.task.reifensbank.entity.User;
+import com.task.reifensbank.exceptions.ReifensbankHttpException;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.repository.DocumentRepository;
 import com.task.reifensbank.repository.UserRepository;
@@ -9,6 +10,8 @@ import com.task.reifensbank.service.storage.StorageService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,32 +31,35 @@ public class DocumentService {
 
     public Document getByPublicId(UUID id) {
         return documentRepository.findByPublicId(id)
-                .orElseThrow(ReifensbankRuntimeException::new);
+                .orElseThrow(() -> new ReifensbankHttpException(HttpStatus.NOT_FOUND, "Document not found"));
     }
 
     @Transactional
     public Document create(MultipartFile file, String name, String extension) throws Exception {
-
-        String username = SecurityContextHolder.getContext().getAuthentication() != null
-                ? SecurityContextHolder.getContext().getAuthentication().getName()
-                : null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = Objects.nonNull(auth) ? auth.getName() : null;
 
         log.debug("Creating document: name='{}', extension='{}', username='{}'", name, extension, username);
         log.trace("Incoming file details: originalName='{}', size={} bytes, contentType={}", file.getOriginalFilename(), file.getSize(), file.getContentType());
 
         User uploadedBy = null;
-        if (username != null) {
+        if (Objects.nonNull(username)) {
             uploadedBy = userRepository.findByUsername(username).orElse(null);
-            log.trace("Uploader resolved: {}", (uploadedBy != null) ? uploadedBy.getUsername() : "anonymous/null");
+            log.trace("Uploader resolved: {}", Objects.nonNull(uploadedBy) ? uploadedBy.getUsername() : "anonymous/null");
         }
 
         UUID publicId = UUID.randomUUID();
         String objectKey = storage.buildObjectKey(publicId.toString(), extension);
         log.trace("Generated identifiers: publicId={}, objectKey='{}'", publicId, objectKey);
 
-        log.debug("Uploading object to storage: key='{}'", objectKey);
-        storage.put(objectKey, file);
-        log.debug("Upload finished: key='{}'", objectKey);
+        try {
+            log.debug("Uploading object to storage: key='{}'", objectKey);
+            storage.put(objectKey, file);
+            log.debug("Upload finished: key='{}'", objectKey);
+        } catch (Exception ex) {
+            log.error("Storage upload failed for key='{}': {}", objectKey, ex.getMessage(), ex);
+            throw new ReifensbankHttpException(HttpStatus.SERVICE_UNAVAILABLE, "Storage upload failed");
+        }
 
         try {
             Document doc = new Document();
@@ -71,8 +77,7 @@ public class DocumentService {
             log.debug("Document persisted: id={}, publicId={}", saved.getId(), saved.getPublicId());
             log.trace("Persisted entity snapshot: filename='{}', sizeBytes={}, contentType='{}', storagePath='{}'", saved.getFilename(), saved.getSizeBytes(), saved.getContentType(), saved.getStoragePath());
 
-            return documentRepository.save(doc);
-
+            return saved;
         } catch (RuntimeException ex) {
             log.error("DB persist failed for publicId={}, attempting storage cleanup for key='{}'. Reason: {}", publicId, objectKey, ex.getMessage(), ex);
             try {
@@ -119,6 +124,8 @@ public class DocumentService {
             log.debug("Document metadata updated successfully: id={}, publicId={}, filename='{}', contentType='{}'", saved.getId(), saved.getPublicId(), saved.getFilename(), saved.getContentType());
 
             return saved;
+        } catch (ReifensbankHttpException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Metadata update failed for {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
@@ -136,7 +143,12 @@ public class DocumentService {
             log.debug("Uploading new content to storage: key='{}'", objectKey);
             storage.put(objectKey, file);
             log.debug("Upload finished: key='{}'", objectKey);
+        } catch (Exception e) {
+            log.error("Storage replace failed for key='{}': {}", objectKey, e.getMessage(), e);
+            throw new ReifensbankHttpException(HttpStatus.SERVICE_UNAVAILABLE, "Storage unavailable");
+        }
 
+        try {
             doc.setSizeBytes(file.getSize());
             doc.setUpdatedAt(OffsetDateTime.now());
 
@@ -144,7 +156,7 @@ public class DocumentService {
             log.debug("Document content replaced successfully: id={}, publicId={}, sizeBytes={}", saved.getId(), saved.getPublicId(), saved.getSizeBytes());
             return saved;
         } catch (Exception e) {
-            log.error("Failed to replace content for document {}: {}", id, e.getMessage(), e);
+            log.error("Failed to persist content replacement for document {}: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }
@@ -153,14 +165,12 @@ public class DocumentService {
     public void delete(UUID id) {
         log.debug("Starting document delete: publicId={}", id);
 
-        // 404 - not found
         Document doc = documentRepository.findByPublicId(id)
-                .orElseThrow(ReifensbankRuntimeException::new);
+                .orElseThrow(() -> new ReifensbankHttpException(HttpStatus.NOT_FOUND, "Document not found"));
 
-        // 409 - linked to any protocol
         if (documentRepository.isAttachedToAnyProtocol(id)) {
             log.warn("Delete blocked: document {} is referenced by protocol(s)", id);
-            throw new ReifensbankRuntimeException();
+            throw new ReifensbankHttpException(HttpStatus.CONFLICT, "Document is referenced by protocol(s)");
         }
 
         String key = doc.getStoragePath();
@@ -169,11 +179,16 @@ public class DocumentService {
         try {
             storage.delete(key);
             log.debug("Storage delete OK: key='{}'", key);
+        } catch (Exception e) {
+            log.error("Storage delete failed for key='{}': {}", key, e.getMessage(), e);
+            throw new ReifensbankHttpException(HttpStatus.SERVICE_UNAVAILABLE, "Storage delete failed");
+        }
 
+        try {
             documentRepository.delete(doc);
             log.debug("DB delete OK: id={}, publicId={}", doc.getId(), doc.getPublicId());
         } catch (Exception e) {
-            log.error("Delete failed for {}. Reason: {}", id, e.getMessage(), e);
+            log.error("DB delete failed for {}. Reason: {}", id, e.getMessage(), e);
             throw new ReifensbankRuntimeException();
         }
     }

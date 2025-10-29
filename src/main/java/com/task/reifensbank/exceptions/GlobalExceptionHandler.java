@@ -15,23 +15,51 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+    
+    private static final String ERROR = "error";
+    private static final String MESSAGE = "message";
+    private static final String STATUS = "status";
+    private static final String PATH = "path";
+    private static final String TIMESTAMP = "timestamp";
+    private static final String CODE = "code";
+
+    @ExceptionHandler(ReifensbankHttpException.class)
+    public ResponseEntity<Map<String, Object>> handleReifensbankHttpException(
+            ReifensbankHttpException ex,
+            HttpServletRequest request
+    ) {
+        String errorCode = ErrorCodeGenerator.generateHexCode();
+        LogService.logError(errorCode, request.getRequestURI(), ex);
+
+        Map<String, Object> body = Map.of(
+                ERROR, ex.getClass().getSimpleName(),
+                MESSAGE, ex.getMessage(),
+                STATUS, ex.getStatus().value(),
+                PATH, request.getRequestURI(),
+                TIMESTAMP, OffsetDateTime.now().toString(),
+                CODE, errorCode
+        );
+
+        return ResponseEntity.status(ex.getStatus()).body(body);
+    }
 
     @ExceptionHandler({ReifensbankRuntimeException.class, Exception.class})
     public ResponseEntity<Map<String, Object>> handleReifensbankException(
             ReifensbankRuntimeException ex,
             HttpServletRequest request
     ) {
-
         String errorCode = ErrorCodeGenerator.generateHexCode();
         LogService.logError(errorCode, request.getRequestURI(), ex);
 
         Map<String, Object> body = Map.of(
-                "error", ex.getClass().getSimpleName(),
-                "message", "Something went wrong :(. Please contact support with error code: " + errorCode,
-                "status", ex.getStatus().value(),
-                "path", request.getRequestURI(),
-                "timestamp", OffsetDateTime.now().toString()
+                ERROR, ex.getClass().getSimpleName(),
+                MESSAGE, "Something went wrong :(. Please contact support with error code: " + errorCode,
+                STATUS, ex.getStatus().value(),
+                PATH, request.getRequestURI(),
+                TIMESTAMP, OffsetDateTime.now().toString(),
+                CODE, errorCode
         );
+
         return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
@@ -44,13 +72,14 @@ public class GlobalExceptionHandler {
         LogService.logError(errorCode, request.getRequestURI(), ex);
 
         Map<String, Object> body = Map.of(
-                "error", "InternalServerError",
-                "message", "An unexpected error occurred. Please contact support with error code: " + errorCode,
-                "status", HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "path", request.getRequestURI(),
-                "timestamp", OffsetDateTime.now().toString()
+                ERROR, "InternalServerError",
+                MESSAGE, "An unexpected error occurred. Please contact support with error code: " + errorCode,
+                STATUS, HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                PATH, request.getRequestURI(),
+                TIMESTAMP, OffsetDateTime.now().toString(),
+                CODE, errorCode
         );
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
-
 }

@@ -2,6 +2,7 @@ package com.task.reifensbank.service;
 
 import com.task.reifensbank.entity.Document;
 import com.task.reifensbank.entity.User;
+import com.task.reifensbank.exceptions.ReifensbankHttpException;
 import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
 import com.task.reifensbank.repository.DocumentRepository;
 import com.task.reifensbank.repository.UserRepository;
@@ -14,6 +15,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,10 +47,10 @@ class DocumentServiceTest {
         SecurityContextHolder.clearContext();
     }
 
+    // ---------- CREATE ----------
+
     @Test
     void create_happyPath_withAuthenticatedUser_persists_andUploads_andReturnsSaved() throws Exception {
-        // arrange
-        // Simulate authenticated user
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("john", "N/A")
         );
@@ -58,63 +60,49 @@ class DocumentServiceTest {
         john.setUsername("john");
         when(userRepository.findByUsername("john")).thenReturn(Optional.of(john));
 
-        // Deterministic object key from storage
         String objectKey = "documents/11111111-1111-1111-1111-111111111111.pdf";
         when(storage.buildObjectKey(anyString(), eq("pdf"))).thenReturn(objectKey);
 
-        // File to upload
         byte[] bytes = "dummy".getBytes();
         MultipartFile file = new MockMultipartFile("file", "sample.pdf", "application/pdf", bytes);
 
-        // Repository returns saved entity (note: service currently calls save twice)
         ArgumentCaptor<Document> toSave = ArgumentCaptor.forClass(Document.class);
         Document saved = new Document();
         saved.setId(100L);
-        UUID publicIdAssigned = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        saved.setPublicId(publicIdAssigned);
+        saved.setPublicId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         saved.setFilename("myName");
         saved.setContentType("pdf");
         saved.setSizeBytes((long) bytes.length);
         saved.setStoragePath(objectKey);
         saved.setUploadedBy(john);
 
-        when(documentRepository.save(any(Document.class))).thenReturn(saved, saved);
+        when(documentRepository.save(any(Document.class))).thenReturn(saved);
 
-        // act
         Document result = service.create(file, "myName", "pdf");
 
-        // assert
-        // Storage interactions
         verify(storage).buildObjectKey(anyString(), eq("pdf"));
         verify(storage).put(eq(objectKey), eq(file));
 
-        // DB interactions — currently twice due to the double-save in your method
-        verify(documentRepository, times(2)).save(toSave.capture());
-
-        // Inspect the document that was attempted to be saved
-        Document firstSavedArg = toSave.getAllValues().get(0);
+        verify(documentRepository, times(1)).save(toSave.capture());
+        Document firstSavedArg = toSave.getValue();
         assertThat(firstSavedArg.getFilename()).isEqualTo("myName");
-        // NOTE: your service sets contentType to the *extension* value ("pdf")
         assertThat(firstSavedArg.getContentType()).isEqualTo("pdf");
         assertThat(firstSavedArg.getSizeBytes()).isEqualTo(bytes.length);
         assertThat(firstSavedArg.getStoragePath()).isEqualTo(objectKey);
         assertThat(firstSavedArg.getUploadedBy()).isEqualTo(john);
         assertThat(firstSavedArg.getPublicId()).isNotNull();
 
-        // Return value is whatever repository returned
         assertThat(result.getId()).isEqualTo(100L);
-        assertThat(result.getPublicId()).isEqualTo(publicIdAssigned);
+        assertThat(result.getPublicId()).isEqualTo(saved.getPublicId());
         assertThat(result.getStoragePath()).isEqualTo(objectKey);
 
-        // Order: put to storage before save (recommended)
         InOrder inOrder = inOrder(storage, documentRepository);
         inOrder.verify(storage).put(eq(objectKey), eq(file));
-        inOrder.verify(documentRepository, atLeastOnce()).save(any(Document.class));
+        inOrder.verify(documentRepository).save(any(Document.class));
     }
 
     @Test
     void create_withNoAuthentication_setsUploadedByNull() throws Exception {
-        // arrange (no auth context)
         String objectKey = "documents/22222222-2222-2222-2222-222222222222.pdf";
         when(storage.buildObjectKey(anyString(), eq("pdf"))).thenReturn(objectKey);
 
@@ -125,21 +113,31 @@ class DocumentServiceTest {
         saved.setId(101L);
         saved.setPublicId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
         saved.setStoragePath(objectKey);
-        when(documentRepository.save(any(Document.class))).thenReturn(saved, saved);
+        when(documentRepository.save(any(Document.class))).thenReturn(saved);
 
-        // act
         Document result = service.create(file, "noAuthName", "pdf");
 
-        // assert
-        verify(documentRepository, atLeastOnce()).save(toSave.capture());
+        verify(documentRepository).save(toSave.capture());
         Document savedArg = toSave.getValue();
         assertThat(savedArg.getUploadedBy()).isNull();
         assertThat(result.getStoragePath()).isEqualTo(objectKey);
     }
 
     @Test
-    void create_whenDbSaveThrows_cleansUpStorage_andWrapsException() throws Exception {
-        // arrange
+    void create_whenStoragePutFails_throws503() throws Exception {
+        MultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", "x".getBytes());
+        when(storage.buildObjectKey(anyString(), eq("pdf"))).thenReturn("bucket/key");
+        doThrow(new Exception("minio down")).when(storage).put(anyString(), any(MultipartFile.class));
+
+        assertThatThrownBy(() -> service.create(file, "n", "pdf"))
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void create_whenDbSaveThrows_cleansUpStorage_andWraps500() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("john", "N/A")
         );
@@ -149,20 +147,18 @@ class DocumentServiceTest {
         when(storage.buildObjectKey(anyString(), eq("pdf"))).thenReturn(objectKey);
 
         MultipartFile file = new MockMultipartFile("file", "sample.pdf", "application/pdf", "x".getBytes());
-
         when(documentRepository.save(any(Document.class))).thenThrow(new RuntimeException("DB is down"));
 
-        // act + assert
         assertThatThrownBy(() -> service.create(file, "x", "pdf"))
                 .isInstanceOf(ReifensbankRuntimeException.class);
 
-        // cleanup attempted
         verify(storage).delete(objectKey);
     }
 
+    // ---------- REPLACE CONTENT ----------
+
     @Test
     void replaceContent_happyPath_uploadsToStorageAndSavesEntity() throws Exception {
-        // Arrange
         UUID id = UUID.fromString("88888888-8888-8888-8888-888888888888");
         MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
 
@@ -177,29 +173,22 @@ class DocumentServiceTest {
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(existing));
         when(documentRepository.save(any(Document.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
         Document result = service.replaceContent(id, file);
 
-        // Assert storage interaction (upload to same key)
         verify(storage, times(1)).put(eq("bucket/path/oldkey"), eq(file));
-
-        // Assert DB save happened
         verify(documentRepository, times(1)).save(any(Document.class));
 
-        // Assert entity changes
         assertThat(result.getPublicId()).isEqualTo(id);
         assertThat(result.getSizeBytes()).isEqualTo(file.getSize());
         assertThat(result.getUpdatedAt()).isNotNull();
 
-        // Optional: verify order (upload before save)
         InOrder inOrder = inOrder(storage, documentRepository);
         inOrder.verify(storage).put(eq("bucket/path/oldkey"), eq(file));
         inOrder.verify(documentRepository).save(any(Document.class));
     }
 
     @Test
-    void replaceContent_whenStoragePutFails_wrapsAndDoesNotSave() throws Exception {
-        // Arrange
+    void replaceContent_whenStoragePutFails_throws503_andNoDbSave() throws Exception {
         UUID id = UUID.fromString("99999999-9999-9999-9999-999999999999");
         MultipartFile file = new MockMultipartFile("file", "new.pdf", "application/pdf", "data".getBytes());
 
@@ -209,34 +198,34 @@ class DocumentServiceTest {
         existing.setStoragePath("bucket/path/key");
 
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(existing));
-        doThrow(new RuntimeException("storage down")).when(storage).put(anyString(), any(MultipartFile.class));
+        doThrow(new Exception("storage down")).when(storage).put(anyString(), any(MultipartFile.class));
 
-        // Act + Assert
         assertThatThrownBy(() -> service.replaceContent(id, file))
-                .isInstanceOf(ReifensbankRuntimeException.class);
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
 
-        // No DB save when storage fails
         verify(documentRepository, never()).save(any(Document.class));
     }
 
     @Test
-    void replaceContent_whenDocumentNotFound_throwsReifensbankRuntimeException() throws Exception {
+    void replaceContent_whenDocumentNotFound_throws404() throws Exception {
         UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         MultipartFile file = new MockMultipartFile("file", "x.pdf", "application/pdf", "x".getBytes());
 
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.replaceContent(id, file))
-                .isInstanceOf(ReifensbankRuntimeException.class);
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
 
-        // no storage nor DB interaction
         verifyNoInteractions(storage);
         verify(documentRepository, never()).save(any(Document.class));
     }
 
+    // ---------- DELETE ----------
+
     @Test
     void delete_happyPath_deletesStorageThenDb() throws Exception {
-        // Arrange
         UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
         Document doc = new Document();
         doc.setId(1L);
@@ -246,33 +235,28 @@ class DocumentServiceTest {
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
         when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(false);
 
-        // Act
         service.delete(id);
 
-        // Assert: storage first, then DB
         InOrder inOrder = inOrder(storage, documentRepository);
         inOrder.verify(storage).delete("bucket/key");
         inOrder.verify(documentRepository).delete(doc);
     }
 
     @Test
-    void delete_whenNotFound_throwsAndNoStorageOrDb() {
-        // Arrange
+    void delete_whenNotFound_throws404_andNoStorageOrDb() throws Exception {
         UUID id = UUID.fromString("22222222-2222-2222-2222-222222222222");
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.empty());
 
-        // Act + Assert
         assertThatThrownBy(() -> service.delete(id))
-                .isInstanceOf(ReifensbankRuntimeException.class);
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
 
-        // Ensure nothing else was called
         verifyNoInteractions(storage);
         verify(documentRepository, never()).delete(any());
     }
 
     @Test
-    void delete_whenAttachedToProtocol_blocksWithException_andNoDeletes() {
-        // Arrange
+    void delete_whenAttachedToProtocol_throws409_andNoDeletes() throws Exception {
         UUID id = UUID.fromString("33333333-3333-3333-3333-333333333333");
         Document doc = new Document();
         doc.setPublicId(id);
@@ -281,18 +265,16 @@ class DocumentServiceTest {
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
         when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(true);
 
-        // Act + Assert
         assertThatThrownBy(() -> service.delete(id))
-                .isInstanceOf(ReifensbankRuntimeException.class);
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.CONFLICT);
 
-        // No storage deletion, no DB deletion
         verifyNoInteractions(storage);
         verify(documentRepository, never()).delete(any());
     }
 
     @Test
-    void delete_whenStorageDeleteFails_wrapsAndDoesNotDeleteDb() throws Exception {
-        // Arrange
+    void delete_whenStorageDeleteFails_throws503_andNoDbDelete() throws Exception {
         UUID id = UUID.fromString("44444444-4444-4444-4444-444444444444");
         Document doc = new Document();
         doc.setPublicId(id);
@@ -300,15 +282,12 @@ class DocumentServiceTest {
 
         when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
         when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(false);
-        doThrow(new RuntimeException("S3 down")).when(storage).delete("bucket/key");
+        doThrow(new Exception("S3 down")).when(storage).delete("bucket/key");
 
-        // Act + Assert
         assertThatThrownBy(() -> service.delete(id))
-                .isInstanceOf(ReifensbankRuntimeException.class);
+                .isInstanceOf(ReifensbankHttpException.class)
+                .extracting("status").isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
 
-        // DB delete must not be called if storage deletion failed
         verify(documentRepository, never()).delete(any());
     }
-
-
 }
