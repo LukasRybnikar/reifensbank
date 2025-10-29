@@ -234,5 +234,81 @@ class DocumentServiceTest {
         verify(documentRepository, never()).save(any(Document.class));
     }
 
+    @Test
+    void delete_happyPath_deletesStorageThenDb() throws Exception {
+        // Arrange
+        UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        Document doc = new Document();
+        doc.setId(1L);
+        doc.setPublicId(id);
+        doc.setStoragePath("bucket/key");
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
+        when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(false);
+
+        // Act
+        service.delete(id);
+
+        // Assert: storage first, then DB
+        InOrder inOrder = inOrder(storage, documentRepository);
+        inOrder.verify(storage).delete("bucket/key");
+        inOrder.verify(documentRepository).delete(doc);
+    }
+
+    @Test
+    void delete_whenNotFound_throwsAndNoStorageOrDb() {
+        // Arrange
+        UUID id = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.empty());
+
+        // Act + Assert
+        assertThatThrownBy(() -> service.delete(id))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        // Ensure nothing else was called
+        verifyNoInteractions(storage);
+        verify(documentRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_whenAttachedToProtocol_blocksWithException_andNoDeletes() {
+        // Arrange
+        UUID id = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        Document doc = new Document();
+        doc.setPublicId(id);
+        doc.setStoragePath("bucket/key");
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
+        when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(true);
+
+        // Act + Assert
+        assertThatThrownBy(() -> service.delete(id))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        // No storage deletion, no DB deletion
+        verifyNoInteractions(storage);
+        verify(documentRepository, never()).delete(any());
+    }
+
+    @Test
+    void delete_whenStorageDeleteFails_wrapsAndDoesNotDeleteDb() throws Exception {
+        // Arrange
+        UUID id = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        Document doc = new Document();
+        doc.setPublicId(id);
+        doc.setStoragePath("bucket/key");
+
+        when(documentRepository.findByPublicId(id)).thenReturn(Optional.of(doc));
+        when(documentRepository.isAttachedToAnyProtocol(id)).thenReturn(false);
+        doThrow(new RuntimeException("S3 down")).when(storage).delete("bucket/key");
+
+        // Act + Assert
+        assertThatThrownBy(() -> service.delete(id))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        // DB delete must not be called if storage deletion failed
+        verify(documentRepository, never()).delete(any());
+    }
+
 
 }

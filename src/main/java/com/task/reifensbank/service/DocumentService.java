@@ -148,4 +148,33 @@ public class DocumentService {
             throw new ReifensbankRuntimeException();
         }
     }
+
+    @Transactional
+    public void delete(UUID id) {
+        log.debug("Starting document delete: publicId={}", id);
+
+        // 404 - not found
+        Document doc = documentRepository.findByPublicId(id)
+                .orElseThrow(ReifensbankRuntimeException::new);
+
+        // 409 - linked to any protocol
+        if (documentRepository.isAttachedToAnyProtocol(id)) {
+            log.warn("Delete blocked: document {} is referenced by protocol(s)", id);
+            throw new ReifensbankRuntimeException();
+        }
+
+        String key = doc.getStoragePath();
+        log.debug("Deleting from storage: key='{}'", key);
+
+        try {
+            storage.delete(key);
+            log.debug("Storage delete OK: key='{}'", key);
+
+            documentRepository.delete(doc);
+            log.debug("DB delete OK: id={}, publicId={}", doc.getId(), doc.getPublicId());
+        } catch (Exception e) {
+            log.error("Delete failed for {}. Reason: {}", id, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
 }

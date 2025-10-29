@@ -77,4 +77,16 @@ public class DocumentsAppService {
             throw new ReifensbankRuntimeException();
         }
     }
+
+    public ResponseEntity<Void> delete(UUID id) {
+        try {
+            log.debug("Deleting document: id={}", id);
+            documentService.delete(id);
+            log.debug("Document deleted: id={}", id);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            log.error("Delete failed for {}: {}", id, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
 }

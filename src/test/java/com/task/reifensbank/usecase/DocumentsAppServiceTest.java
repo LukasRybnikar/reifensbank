@@ -281,5 +281,31 @@ class DocumentsAppServiceTest {
         }
     }
 
+    @Test
+    void delete_happyPath_returns204_andDelegatesToService() {
+        // Arrange
+        UUID id = UUID.fromString("55555555-5555-5555-5555-555555555555");
+
+        // Act
+        ResponseEntity<Void> resp = appService.delete(id);
+
+        // Assert
+        assertThat(resp.getStatusCodeValue()).isEqualTo(204);
+        verify(documentService, times(1)).delete(id);
+    }
+
+    @Test
+    void delete_whenServiceThrows_wrapsIntoReifensbankRuntimeException() {
+        // Arrange
+        UUID id = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        doThrow(new ReifensbankRuntimeException()).when(documentService).delete(id);
+
+        // Act + Assert
+        assertThatThrownBy(() -> appService.delete(id))
+                .isInstanceOf(ReifensbankRuntimeException.class);
+
+        verify(documentService).delete(id);
+    }
+
 
 }

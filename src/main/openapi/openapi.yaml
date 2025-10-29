@@ -117,7 +117,38 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-
+    delete:
+      tags: [ Documents ]
+      summary: Delete document (storage + DB)
+      description: |
+        Deletes the binary from storage and the document record from DB.
+        If the document is referenced by any protocol, deletion is blocked.
+      operationId: documentsDelete
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Deleted (no content)
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Conflict – document is referenced by protocol(s)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                referencedByProtocol:
+                  summary: Document used by protocol
+                  value:
+                    timestamp: "2025-10-29T08:45:00Z"
+                    status: 409
+                    error: "Conflict"
+                    message: "Document is referenced by protocol(s) and cannot be deleted."
+                    path: "/api/documents/{id}"
   /documents/{id}/content:
     put:
       tags: [ Documents ]
