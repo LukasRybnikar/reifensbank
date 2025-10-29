@@ -1,0 +1,44 @@
+package com.task.reifensbank.usecase;
+
+import com.task.reifensbank.entity.Document;
+import com.task.reifensbank.exceptions.ReifensbankRuntimeException;
+import com.task.reifensbank.mappers.DocumentMappers;
+import com.task.reifensbank.service.DocumentService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.net.URI;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DocumentsAppService {
+
+    private final DocumentService documentService;
+
+    public ResponseEntity<com.task.reifensbank.model.Document> create(MultipartFile file,
+                                                                      String name,
+                                                                      String type) {
+        //TODO: scnaner for mallware detection in files
+
+        try {
+            log.debug("Starting document creation: name='{}', type='{}'", name, type);
+            log.debug("Incoming file: originalName='{}', size={} bytes, contentType={}", file.getOriginalFilename(), file.getSize(), file.getContentType());
+            Document saved = documentService.create(file, name, type);
+
+            log.trace("Entity after persistence: id={}, publicId={}, filename={}", saved.getId(), saved.getPublicId(), saved.getFilename());
+            com.task.reifensbank.model.Document body = DocumentMappers.toModel(saved);
+            URI location = URI.create("/documents/" + saved.getPublicId());
+
+            log.debug("Document created: id={}, publicId={}, location={}", saved.getId(), saved.getPublicId(), location);
+
+            return ResponseEntity.created(location).body(body);
+        } catch (Exception e) {
+            log.error("Failed to create document: name='{}', type='{}'. Reason: {}", name, type, e.getMessage(), e);
+            throw new ReifensbankRuntimeException();
+        }
+    }
+}

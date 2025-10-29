@@ -35,15 +35,6 @@ spring:
     init:
       mode: never
 
-# ===============================
-# 🪣 MinIO configuration
-# ===============================
-minio:
-  endpoint: http://localhost:9000
-  access-key: ${MINIO_ROOT_USER:minio}
-  secret-key: ${MINIO_ROOT_PASSWORD:minio-secret}
-  bucket: ${MINIO_BUCKET:files}
-  secure: false
 
 # ===============================
 # 🧾 Logging
@@ -65,6 +56,19 @@ app:
     documents: true
     protocols: true
     fallbackDeny: true
+
+    # ===============================
+    # 🪣 MinIO configuration
+    # ===============================
+  storage:
+    provider: minio
+    minio:
+      # v Dockeri: služba "minio" beží na porte 9000 (service-discovery cez názov kontajnera)
+      # mimo Dockeru (lokálne): prepíš na http://localhost:9000
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ROOT_USER:minio}
+      secret-key: ${MINIO_ROOT_PASSWORD:minio-secret}
+      bucket: ${MINIO_BUCKET:files}
 
   jwt:
     secret: "change-me-please-a-very-long-random-256bit-secret"

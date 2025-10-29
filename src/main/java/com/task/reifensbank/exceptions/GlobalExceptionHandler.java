@@ -16,7 +16,7 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ReifensbankRuntimeException.class)
+    @ExceptionHandler({ReifensbankRuntimeException.class, Exception.class})
     public ResponseEntity<Map<String, Object>> handleReifensbankException(
             ReifensbankRuntimeException ex,
             HttpServletRequest request
@@ -25,7 +25,7 @@ public class GlobalExceptionHandler {
         String errorCode = ErrorCodeGenerator.generateHexCode();
         LogService.logError(errorCode, request.getRequestURI(), ex);
 
-        Map<String, Object> body = Map.<String, Object>of(
+        Map<String, Object> body = Map.of(
                 "error", ex.getClass().getSimpleName(),
                 "message", "Something went wrong :(. Please contact support with error code: " + errorCode,
                 "status", ex.getStatus().value(),
@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
         String errorCode = ErrorCodeGenerator.generateHexCode();
         LogService.logError(errorCode, request.getRequestURI(), ex);
 
-        Map<String, Object> body = Map.<String, Object>of(
+        Map<String, Object> body = Map.of(
                 "error", "InternalServerError",
                 "message", "An unexpected error occurred. Please contact support with error code: " + errorCode,
                 "status", HttpStatus.INTERNAL_SERVER_ERROR.value(),

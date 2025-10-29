@@ -32,8 +32,11 @@
         <swagger.annotations.version>2.2.22</swagger.annotations.version>
         <jackson.nullable.version>0.2.6</jackson.nullable.version>
         <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
+        <minio.version>8.5.11</minio.version>
         <lombok.version>1.18.34</lombok.version>
         <postgresql.version>42.7.4</postgresql.version>
+        <commons-codec.version>1.17.1</commons-codec.version>
+
         <!-- Plugin versions -->
         <build.helper.plugin.version>3.5.0</build.helper.plugin.version>
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
@@ -100,6 +103,17 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Minio -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>${minio.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>${commons-codec.version}</version>
+        </dependency>
 
         <!-- Jakarta Bean Validation (managed by Spring Boot parent) -->
         <dependency>
